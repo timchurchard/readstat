@@ -23,6 +23,9 @@ func main() {
 	switch command {
 	case "sync":
 		os.Exit(cmd.Sync(os.Stdout))
+
+	case "stats":
+		os.Exit(cmd.Stats(os.Stdout))
 	}
 
 	usageRoot()

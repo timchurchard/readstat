@@ -60,7 +60,16 @@ func getModel(device string) string {
 	return ""
 }
 
-/*// cleanContentFilename takes a
-func cleanContentFilename(BookID string) (string, string) {
+// cleanContentFilename takes a "file:///mnt/onboard/dir/file.epub" and returns "dir/file.epub"
+func cleanContentFilename(fn string) string {
+	startPos := strings.Index(fn, KoboFilenamePrefix) + len(KoboFilenamePrefix)
 
-}*/
+	return fn[startPos:]
+}
+
+// getPartOffFilename takes a "/mnt/onboard/dir/file.epub!!part.html" and returns "part.html"
+func getPartOffFilename(fn string) string {
+	startPos := strings.Index(fn, KoboPartSeparator) + len(KoboPartSeparator)
+
+	return fn[startPos:]
+}
