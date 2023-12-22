@@ -1,6 +1,6 @@
 module github.com/timchurchard/readstat
 
-go 1.21.5
+go 1.20
 
 require github.com/ncruces/go-sqlite3 v0.11.2
 
