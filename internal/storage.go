@@ -1,3 +1,4 @@
+//go:generate mockgen -package internal -destination storage_mock.go -source storage.go
 package internal
 
 import (
@@ -20,20 +21,22 @@ type StorageDevice struct {
 }
 
 type StorageContent struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	URL    string `json:"url"`
 
 	Words int `json:"words"`
 
-	URL    string `json:"url"`
-	IsBook bool   `json:"book"`
+	IsBook     bool `json:"book"`
+	IsFinished bool `json:"article_is_finished"`
 }
 
 type StorageEvents struct {
 	EventName string `json:"event"`
-
-	Time     string `json:"time"`
-	Duration int    `json:"duration"`
+	Time      string `json:"time"`
+	Duration  int    `json:"duration"`
+	Device    string `json:"device"`
 }
 
 const (
@@ -72,13 +75,15 @@ func (s *Storage) Save() error {
 	return os.WriteFile(s.fn, storageBytes, 0o644)
 }
 
-func (s *Storage) AddContent(fn, title, url string, words int, book bool) {
+func (s *Storage) AddContent(fn, title, author, url string, words int, book, finished bool) {
 	s.Contents[fn] = StorageContent{
-		ID:     fn,
-		Title:  title,
-		Words:  words,
-		URL:    url,
-		IsBook: book,
+		ID:         fn,
+		Title:      title,
+		Author:     author,
+		Words:      words,
+		URL:        url,
+		IsBook:     book,
+		IsFinished: finished,
 	}
 }
 
@@ -89,7 +94,7 @@ func (s *Storage) AddDevice(device, model string) {
 	}
 }
 
-func (s *Storage) AddEvent(fn, name string, t time.Time, duration int) {
+func (s *Storage) AddEvent(fn, device, name string, t time.Time, duration int) {
 	timeStr := t.Format(StorageTimeFmt)
 
 	found := false
@@ -104,6 +109,7 @@ func (s *Storage) AddEvent(fn, name string, t time.Time, duration int) {
 			EventName: name,
 			Time:      timeStr,
 			Duration:  duration,
+			Device:    device,
 		})
 	}
 }

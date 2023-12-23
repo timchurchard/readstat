@@ -29,7 +29,6 @@ func (t KoboEventType) String() string {
 
 const (
 	KoboFilenamePrefix = "/mnt/onboard/"
-	KoboPartSeparator  = "!!"
 
 	KoboTimeFmt = "2006-01-02T15:04:05.000"
 	// koboTimeSample = "2023-12-19T11:42:00.000"

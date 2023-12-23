@@ -38,6 +38,11 @@ func Sync(out io.Writer) int {
 
 	flag.Parse()
 
+	if databaseFn == "" {
+		fmt.Println("-d or --database /path/to/KoboReader.sqlite is required.")
+		return 1
+	}
+
 	// Read data from Kobo DB
 	db, err := pkg.NewKoboDatabase(databaseFn)
 	if err != nil {
@@ -62,22 +67,27 @@ func Sync(out io.Writer) int {
 		panic(err)
 	}
 
-	defer storage.Save()
+	defer func() {
+		if err := storage.Save(); err != nil {
+			fmt.Printf("Error saving: %v\n", err)
+		}
+	}()
 
-	storage.AddDevice(db.Device())
+	device, model := db.Device()
+	storage.AddDevice(device, model)
 
 	for cIdx := range contents {
-		storage.AddContent(contents[cIdx].ID, contents[cIdx].Title, contents[cIdx].URL, contents[cIdx].TotalWords(), contents[cIdx].IsBook)
+		storage.AddContent(contents[cIdx].ID, contents[cIdx].Title, contents[cIdx].Author, contents[cIdx].URL, contents[cIdx].TotalWords(), contents[cIdx].IsBook, contents[cIdx].Finished)
 	}
 
 	for eIdx := range events {
 		if events[eIdx].EventType == pkg.ReadEvent {
 			for sIdx := range events[eIdx].ReadingSessions {
 				durationSecs := events[eIdx].ReadingSessions[sIdx].UnixEnd - events[eIdx].ReadingSessions[sIdx].UnixStart
-				storage.AddEvent(events[eIdx].BookID, events[eIdx].EventType.String(), events[eIdx].ReadingSessions[sIdx].Start, durationSecs)
+				storage.AddEvent(events[eIdx].BookID, device, events[eIdx].EventType.String(), events[eIdx].ReadingSessions[sIdx].Start, durationSecs)
 			}
 		} else {
-			storage.AddEvent(events[eIdx].BookID, events[eIdx].EventType.String(), events[eIdx].Time, 0)
+			storage.AddEvent(events[eIdx].BookID, device, events[eIdx].EventType.String(), events[eIdx].Time, 0)
 		}
 	}
 
