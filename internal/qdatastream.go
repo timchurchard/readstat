@@ -246,7 +246,7 @@ func (r *QDataStreamReader) ReadQBitArray() ([]bool, error) {
 		return nil, err
 	}
 	bits := make([]bool, n)
-	for i := n - 1; i >= 0; i-- {
+	for i := n - 1; i >= 0; i-- { //nolint:staticcheck
 		bits[i] = (((buf[i/8]) >> (7 - i%8)) & 0x1) == 0x1
 	}
 	return bits, nil
@@ -343,7 +343,7 @@ func (r *QDataStreamReader) ReadQVariant() (QMetaType, interface{}, error) { // 
 	}
 
 	var v interface{}
-	err = nil
+
 	switch QMetaType(t) {
 	case QMetaTypeBool:
 		x, xerr := r.ReadBool()

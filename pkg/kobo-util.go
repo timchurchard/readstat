@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // getDevice read the .kobo/version file for device id
@@ -62,14 +64,57 @@ func getModel(device string) string {
 
 // cleanContentFilename takes a "file:///mnt/onboard/dir/file.epub" and returns "dir/file.epub"
 func cleanContentFilename(fn string) string {
-	startPos := strings.Index(fn, KoboFilenamePrefix) + len(KoboFilenamePrefix)
+	startPos := strings.Index(fn, KoboFilenamePrefix)
 
-	return fn[startPos:]
+	if startPos == -1 {
+		// Pocket articles have an ID so no cleaning needed
+		return fn
+	}
+
+	return fn[startPos+len(KoboFilenamePrefix):]
 }
 
-// getPartOffFilename takes a "/mnt/onboard/dir/file.epub!!part.html" and returns "part.html"
-func getPartOffFilename(fn string) string {
-	startPos := strings.Index(fn, KoboPartSeparator) + len(KoboPartSeparator)
+// splitContentFilename takes a "/mnt/onboard/dir/file.epub!!part.html" and returns "dir/file.epub" and "part.html"
+func splitContentFilename(fn string) (string, string) {
+	startPos := strings.Index(fn, KoboFilenamePrefix)
+	if startPos == -1 {
+		startPos = 0
+	}
 
-	return fn[startPos:]
+	partPos := 0
+	partLen := 0
+	fUp := strings.ToUpper(fn)
+
+	switch {
+	case strings.Contains(fUp, koboFilePartSeparator):
+		partPos = strings.Index(fUp, koboFilePartSeparator)
+		partLen = len(koboFilePartSeparator)
+
+	case strings.Contains(fUp, koboFilePartSeparatorAlt):
+		partPos = strings.Index(fUp, koboFilePartSeparatorAlt)
+		partLen = len(koboFilePartSeparatorAlt)
+
+	case strings.Contains(fUp, koboDLPartSeparator):
+		partPos = strings.Index(fUp, koboDLPartSeparator)
+		partLen = len(koboDLPartSeparator)
+
+	case strings.Contains(fUp, koboDLPartSeparatorLegacy):
+		partPos = strings.Index(fUp, koboDLPartSeparatorLegacy)
+		partLen = len(koboDLPartSeparatorLegacy)
+
+	case strings.Contains(fUp, koboDLPartEpub):
+		partPos = strings.Index(fUp, koboDLPartEpub)
+		partLen = len(koboDLPartEpub)
+	}
+
+	if partPos == 0 {
+		return fn[startPos:], ""
+	}
+
+	return fn[startPos:partPos], fn[partPos+partLen:]
+}
+
+func isValidUUID(u string) bool {
+	_, err := uuid.Parse(u)
+	return err == nil // todo: good enough?
 }

@@ -166,8 +166,17 @@ LastTimeStartedReading  / LastTimeFinishedReading  / Duration 0
 
 ## Activity table
 
-```sql
+Activity table contains a BLOB but does not seem to have interesting data. RecentBook, TopPicks, WhatsNew etc
 
+```
+DEBUG! file:///mnt/onboard/Jackson, Shirley/Haunting of Hill House, The - Shirley Jackson.kepub.epub / false / RecentBook / 2 / 2023-11-07T21:01:51 / map[]
+DEBUG! a6a8ec99-e9d9-4664-87d8-f2113c23f6e7 / false / RecentBook / 2 / 2023-11-23T21:33:17 / map[]
+DEBUG! file:///mnt/onboard/Picknett, Lyrince, Clive/Stargate Conspiracy_ Revealing the Truth Behind Extraterrestrial Che Mysteries of Ancient Egypt - Lynn Picknett & Clive Prince.kepub.epub / false / RecentBook / 2 / 2023-11-23T22:03:38 / map[]
+DEBUG! file:///mnt/onboard/King, Stephen/Green Mile, The - Stephen King.kepub.epub / false / RecentBook / 2 / 2023-12-08T22:06:43 / map[]
+DEBUG! file:///mnt/onboard/King, Stephen/Different Seasons - Stephen King.kepub.epub / false / RecentBook / 2 / 2023-12-14T22:32:11 / map[]
+DEBUG! b0d1b883-70ee-c833-4cb8-08d790600c26 / false / TopPicksTab / 1 / 2023-12-18T21:45:37 / map[ACTIVITY_TEXT:Coming soon to audiobooks BOOKSTORE_ACTIVITY_TAB_FILTER:{} BOOKSTORE_ACTIVITY_TAB_IS_LEAF:true BOOKSTORE_ACTIVITY_TAB_PARENT_ID:[97 98 99 100 101 102 102 102 45 102 102 102 102 45 102 102 102 102 45 102 102 102 102 45 102 102 102 102 102 102 102 102 101 102 101 51] BOOKSTORE_TAB_MAX_SIZE:300 BOOKSTORE_TAB_TYPE:[49] DISCOVERY_DESCRIPTION: DISCOVERY_VOLUME_ID_LIST:[2aadc0f9-0b07-4be6-8252-e8a8a35be26c 7bb33750-7043-4e3e-ac9c-003ab850a94f 83641dc3-01c6-437a-9784-411a9fa7bc3d 585f21e8-82bf-4ee4-ae78-770715d72e3a]]
+DEBUG! SomeFakeRecommendedTabId / false / Recommendations / 1 / 2023-12-20T15:42:00 / map[DISCOVERY_DESCRIPTION:8 DISCOVERY_VOLUME_ID_LIST:[5c5385fd-6d61-4cb0-b55d-85bdca2c71ee 69bf947f-2429-4a03-9b04-695681ea4332 3cca3c69-bc3b-46a1-9bfd-f9d619ae5e93 6d02e85d-9c0c-43a1-b2bc-2a38e8711d6c d4edbe78-c3ea-48fa-ac68-1944904ed47c 002e5427-eff6-407c-9a5c-9ad0e0915cfe ae7352ca-5939-4041-ac70-bcc798e03af7 5c0b8dfc-9656-4b32-aec8-f3d7698afa8d 2adb7a72-5a65-4a24-b981-d230a8e1cd6b 6e085924-e598-4a26-abfb-ae11875e9a55 8193e3e3-b8eb-42c2-93b9-357aa0fd5112]]
+DEBUG! file:///mnt/onboard/Ende, Michael/Neverending Story, The - Michael Ende.kepub.epub / false / RecentBook / 2 / 2023-12-22T19:48:56 / map[]
 
 ```
 

@@ -1,9 +1,10 @@
 package pkg
 
 type KoboBook struct {
-	ID    string
-	Title string
-	URL   string
+	ID     string
+	Title  string
+	Author string
+	URL    string
 
 	Finished        bool
 	ProgressPercent int

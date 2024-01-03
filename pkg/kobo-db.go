@@ -12,6 +12,7 @@ import (
 
 	"github.com/ncruces/go-sqlite3"
 	_ "github.com/ncruces/go-sqlite3/embed"
+
 	"github.com/timchurchard/readstat/internal"
 )
 
@@ -32,6 +33,22 @@ type koboDatabase struct {
 	device string
 	model  string
 }
+
+const (
+	koboFilePartSeparator     = "!!"
+	koboFilePartSeparatorAlt  = "#("
+	koboDLPartSeparator       = "!OPS!"
+	koboDLPartSeparatorLegacy = "!OEBPS!"
+	koboDLPartEpub            = "!EPUB!"
+
+	pocketMime = "application/x-kobo-html+pocket"
+
+	downloadedType = "6" // downloadedType seems to cover 'downloaded' stuff from kobo/pocket
+
+	// todo: not reliable
+	// localfileType  = "9" // localfileType seems to cover local files e.g. all my side-loaded calibre (k)epubs
+	// localfilePartType = "899" // localfilePartType seems to cover html files inside epubs
+)
 
 func NewKoboDatabase(fn string) (KoboDatabase, error) {
 	// todo read-only ! conn, err := sqlite3.OpenFlags(fn, sqlite3.OPEN_READONLY)
@@ -58,7 +75,7 @@ func (k koboDatabase) Device() (string, string) {
 }
 
 func (k koboDatabase) Contents() ([]KoboBook, error) {
-	stmt, _, err := k.conn.Prepare(`SELECT ContentID, BookID, BookTitle, ReadStatus, WordCount, BookmarkWordOffset, ___PercentRead, TimeSpentReading FROM content`)
+	stmt, _, err := k.conn.Prepare(`SELECT ContentID, BookID, ContentType, MimeType, Title, BookTitle, Attribution, ReadStatus, WordCount, ___PercentRead, ContentURL FROM content`)
 	if err != nil {
 		return nil, err
 	}
@@ -68,53 +85,68 @@ func (k koboDatabase) Contents() ([]KoboBook, error) {
 	result := []KoboBook{}
 
 	for stmt.Step() {
-		if strings.Contains(stmt.ColumnText(1), KoboFilenamePrefix) {
-			// Found a local file like the Calibre loaded .epub files I read. TODO kobo downloaded content. TODO Pocket content. TODO other?
-			fn := cleanContentFilename(stmt.ColumnText(1))
+		cID := stmt.ColumnText(0)
+		// bID := stmt.ColumnText(1)
+		contentType := stmt.ColumnText(2)
+		mimeType := stmt.ColumnText(3)
+		title := stmt.ColumnText(4)
+		// bookTitle := stmt.ColumnText(5)
+		author := stmt.ColumnText(6)
+		readStatus := stmt.ColumnInt(7)
+		wordCount := stmt.ColumnInt(8)
+		pcRead := stmt.ColumnInt(9)
+		contentURL := stmt.ColumnText(10)
 
-			idx, exists := index[fn]
-			if !exists {
+		// fmt.Printf("koboDatabase.Contents! cID=%s bID=%s contentType=%s mimeType=%s title=%s bookTitle=%s author=%s readStatus=%d wordCount=%d pcRead=%d contentURL=%s\n",
+		//	cID, bID, contentType, mimeType, title, bookTitle, author, readStatus, wordCount, pcRead, contentURL)
+
+		if contentType == downloadedType && mimeType == pocketMime {
+			if _, exists := index[cID]; !exists {
 				result = append(result, KoboBook{
-					ID:              fn,
-					Title:           stmt.ColumnText(2),
-					URL:             "", // todo: Pocket
-					Finished:        false,
-					ProgressPercent: 0,
-					Parts:           map[string]KoboBookPart{},
-					IsBook:          true,
+					ID:              cID,
+					Title:           title,
+					Author:          author,
+					URL:             contentURL,
+					Finished:        readStatus == 1, // Pocket articles seem to have 0 or 1
+					ProgressPercent: pcRead,
+					Parts:           map[string]KoboBookPart{"0": {WordCount: wordCount}},
+					IsBook:          false,
+				})
+
+				index[cID] = len(result) - 1
+			}
+		}
+
+		if mimeType != pocketMime { // ignore downloaded pocket articles
+			fn, pn := splitContentFilename(cID)
+
+			if _, exists := index[fn]; !exists {
+				result = append(result, KoboBook{
+					ID:     fn,
+					Parts:  map[string]KoboBookPart{},
+					IsBook: true,
 				})
 
 				index[fn] = len(result) - 1
-				idx = index[fn]
 			}
 
-			if strings.Contains(stmt.ColumnText(0), KoboPartSeparator) {
-				// Book part, used for word count
-				part := getPartOffFilename(stmt.ColumnText(0))
-
-				wordCount := 0
-				if stmt.ColumnInt(4) > 0 {
-					wordCount = stmt.ColumnInt(4)
-				}
-
-				if _, exists = result[idx].Parts[part]; !exists {
-					result[idx].Parts[part] = KoboBookPart{
-						WordCount: wordCount,
-					}
-				}
+			if pn == "" {
+				result[index[fn]].Title = title
+				result[index[fn]].Author = author
+				result[index[fn]].URL = contentURL
+				result[index[fn]].ProgressPercent = pcRead
 			} else {
-				// Book, update fields
-				// Record rough percentage (25, 50, 75, 100)
-				result[idx].ProgressPercent = stmt.ColumnInt(6)
-
-				// If ReadStatus is 2 then we'll set IsFinished
-				if stmt.ColumnInt(3) == 2 {
-					result[idx].Finished = true
+				if wordCount > 0 {
+					if _, exists := result[index[fn]].Parts[pn]; !exists {
+						result[index[fn]].Parts[pn] = KoboBookPart{
+							WordCount: wordCount,
+						}
+					}
 				}
 			}
 		}
 	}
-	if err := stmt.Err(); err != nil {
+	if err = stmt.Err(); err != nil {
 		return nil, err
 	}
 
@@ -128,15 +160,19 @@ func (k koboDatabase) Contents() ([]KoboBook, error) {
 
 func (k koboDatabase) Events() ([]KoboEvent, error) {
 	const (
-		eventProgress25 = 1012
-		eventProgress50 = 1013
-		eventProgress75 = 1014
-		eventReadStart  = 1020
-		eventReadEnd    = 1021
-		eventFinished   = 80
+		eventProgress25  = 1012
+		eventProgress50  = 1013
+		eventProgress75  = 1014
+		eventReadStart   = 1020
+		eventReadEnd     = 1021
+		eventFinished    = 80
+		eventFinishedAlt = 5 // todo: I think this is 'ended reading session' e.g. switched book not finished book
+		eventSession     = 46
 
 		// minReadSessionSecs may need tweaking. Minimum reading session to include in stats
-		minReadSessionSecs = 30
+		minReadSessionSecs = 29
+
+		extraDataReadingSeconds = "ExtraDataReadingSeconds"
 	)
 
 	stmt, _, err := k.conn.Prepare(`SELECT EventType, FirstOccurrence, LastOccurrence, EventCount, ContentID, ExtraData FROM Event`)
@@ -152,63 +188,108 @@ func (k koboDatabase) Events() ([]KoboEvent, error) {
 	endTimes := map[string][]uint32{}
 
 	for stmt.Step() {
-		if strings.Contains(stmt.ColumnText(4), KoboFilenamePrefix) {
-			extraData := []byte{}
-			colData := stmt.ColumnBlob(5, extraData)
+		extraData := []byte{}
+		colData := stmt.ColumnBlob(5, extraData)
 
-			r := bytes.NewBuffer(colData)
-			v, err := (&internal.QDataStreamReader{
-				Reader:    r,
-				ByteOrder: binary.BigEndian,
-			}).ReadQStringQVariantAssociative()
-			if err != nil {
-				if !errors.Is(err, io.EOF) {
-					fmt.Println(err)
-				}
-			}
-
-			// Found a local file like the Calibre loaded .epub files I read. TODO kobo downloaded content. TODO Pocket content. TODO other?
-			fn := cleanContentFilename(stmt.ColumnText(4))
-
-			// first := stmt.ColumnText(1)
-			last := stmt.ColumnText(2)
-			// count := stmt.ColumnInt(3)
-
-			lastTime, err := time.Parse(KoboTimeFmt, last)
-			if err != nil {
+		r := bytes.NewBuffer(colData)
+		v, err := (&internal.QDataStreamReader{
+			Reader:    r,
+			ByteOrder: binary.BigEndian,
+		}).ReadQStringQVariantAssociative()
+		if err != nil {
+			// Ignore EOF & unimplemented errors when decoding extra data
+			if !errors.Is(err, io.EOF) && err.Error() != "unimplemented type 20" {
 				fmt.Println(err)
 			}
+		}
 
-			switch stmt.ColumnInt(0) {
-			case eventProgress25:
-				result = append(result, KoboEvent{BookID: fn, EventType: Progress25Event, Time: lastTime})
+		// first := stmt.ColumnText(1)
+		last := stmt.ColumnText(2)
+		// count := stmt.ColumnInt(3)
+		lastTime, _ := time.Parse(KoboTimeFmt, last)
 
-			case eventProgress50:
-				result = append(result, KoboEvent{BookID: fn, EventType: Progress50Event, Time: lastTime})
+		// Try to get filename from cID
+		cID := stmt.ColumnText(4)
+		fn, _ := splitContentFilename(cID)
+		if fn == "" {
+			continue
+		}
 
-			case eventProgress75:
-				result = append(result, KoboEvent{BookID: fn, EventType: Progress75Event, Time: lastTime})
+		/*if strings.Contains(fn, "Fight") {
+			fmt.Printf("DEBUG! %d / %s / %s / %v\n", stmt.ColumnInt(0), fn, last, v)
+		}*/
 
-			case eventReadStart:
-				data := v["eventTimestamps"].([]interface{})
-				startTimes[fn] = make([]uint32, len(data))
-				for idx := range data {
-					startTimes[fn][idx] = data[idx].(uint32)
-				}
+		if strings.HasSuffix(fn, ".png") {
+			// Skip image files (koreader.png for example)
+			continue
+		}
 
-			case eventReadEnd:
-				data := v["eventTimestamps"].([]interface{})
-				endTimes[fn] = make([]uint32, len(data))
-				for idx := range data {
-					endTimes[fn][idx] = data[idx].(uint32)
-				}
+		switch stmt.ColumnInt(0) {
+		case eventProgress25:
+			result = append(result, KoboEvent{BookID: fn, EventType: Progress25Event, Time: lastTime})
 
-			case eventFinished:
-				result = append(result, KoboEvent{BookID: fn, EventType: FinishEvent, Time: lastTime})
+		case eventProgress50:
+			result = append(result, KoboEvent{BookID: fn, EventType: Progress50Event, Time: lastTime})
 
-			default:
-				// fmt.Printf("DEBUG! %d / %s / %s / %s / %d / %v\n", stmt.ColumnInt(0), fn, first, last, count, v)
+		case eventProgress75:
+			result = append(result, KoboEvent{BookID: fn, EventType: Progress75Event, Time: lastTime})
+
+		case eventReadStart:
+			data := v["eventTimestamps"].([]interface{})
+			startTimes[fn] = make([]uint32, len(data))
+			for idx := range data {
+				startTimes[fn][idx] = data[idx].(uint32)
 			}
+
+		case eventReadEnd:
+			data := v["eventTimestamps"].([]interface{})
+			endTimes[fn] = make([]uint32, len(data))
+			for idx := range data {
+				endTimes[fn][idx] = data[idx].(uint32)
+			}
+
+		case eventFinished:
+			result = append(result, KoboEvent{BookID: fn, EventType: FinishEvent, Time: lastTime})
+
+		case eventSession:
+			// For pocket we only get eventSession
+			contentType := ""
+			for key, val := range v {
+				if key == "ContentType" {
+					switch val.(type) {
+					case string:
+						contentType = val.(string)
+					case []uint8:
+						contentType = string(val.([]uint8))
+					}
+				}
+			}
+
+			if contentType == pocketMime {
+				// Pocket mime
+				// fmt.Printf("DEBUG! %d / %s / %s / %s / %d / %v\n", stmt.ColumnInt(0), cID, first, last, count, v)
+				if v[extraDataReadingSeconds] != nil {
+					// We got a non-nil reading seconds. (Finished & percent is stored in content table for pocket)
+					secondsRead := int(v[extraDataReadingSeconds].(int32))
+
+					if secondsRead > minReadSessionSecs {
+						startUnix := int(lastTime.Unix())
+
+						sessions := []KoboEventReadingSession{
+							{
+								UnixStart: startUnix,
+								UnixEnd:   startUnix + secondsRead,
+								Start:     time.Unix(int64(startUnix), 0),
+								End:       time.Unix(int64(startUnix+secondsRead), 0),
+							},
+						}
+						result = append(result, KoboEvent{BookID: fn, EventType: ReadEvent, Time: time.Time{}, ReadingSessions: sessions})
+					}
+				}
+			}
+
+		default:
+			// fmt.Printf("DEBUG! %d / %s / %s / %s / %d / %v\n", stmt.ColumnInt(0), fn, first, last, count, v)
 		}
 	}
 	if err := stmt.Err(); err != nil {
